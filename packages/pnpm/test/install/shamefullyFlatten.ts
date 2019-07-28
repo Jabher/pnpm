@@ -47,7 +47,7 @@ test('shamefully-flatten: applied only to the workspace root package when set to
   ])
 
   await writeYamlFile('pnpm-workspace.yaml', { packages: ['**', '!store/**'] })
-  await fs.writeFile('.npmrc', 'shamefully-flatten', 'utf8')
+  await fs.writeFile('.npmrc', 'shamefully-flatten=true', 'utf8')
 
   await execPnpm('recursive', 'install')
 
@@ -55,4 +55,27 @@ test('shamefully-flatten: applied only to the workspace root package when set to
   await projects['root'].has('foo')
   await projects['project'].hasNot('foo')
   await projects['project'].has('foobar')
+})
+
+testOnly('shamefully-flatten: applied only to the root node_modules even when there is no package.json in the root', async (t: tape.Test) => {
+  const projects = preparePackages(t, [
+    {
+      name: 'project',
+      version: '1.0.0',
+
+      dependencies: {
+        'foobar': '100.0.0',
+      },
+    },
+  ])
+
+  await writeYamlFile('pnpm-workspace.yaml', { packages: ['**', '!store/**'] })
+  await fs.writeFile('.npmrc', 'shamefully-flatten=true', 'utf8')
+
+  await execPnpm('recursive', 'install')
+
+  // await projects['root'].has('dep-of-pkg-with-1-dep')
+  // await projects['root'].has('foo')
+  // await projects['project'].hasNot('foo')
+  // await projects['project'].has('foobar')
 })

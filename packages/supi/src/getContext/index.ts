@@ -22,20 +22,20 @@ export interface PnpmContext<T> {
   currentLockfile: Lockfile,
   existsCurrentLockfile: boolean,
   existsWantedLockfile: boolean,
+  hoistedAliases: {[depPath: string]: string[]}
   importers: Array<{
     bin: string,
-    hoistedAliases: {[depPath: string]: string[]}
     manifest: ImporterManifest,
     modulesDir: string,
     id: string,
     prefix: string,
-    shamefullyFlatten: boolean,
   } & T>,
   include: IncludedDependencies,
   modulesFile: Modules | null,
   pendingBuilds: string[],
   lockfileDirectory: string,
   virtualStoreDir: string,
+  shamefullyFlatten: boolean,
   skipped: Set<string>,
   storePath: string,
   wantedLockfile: Lockfile,
@@ -46,7 +46,6 @@ export interface ImportersOptions {
   bin?: string,
   manifest: ImporterManifest,
   prefix: string,
-  shamefullyFlatten?: boolean,
 }
 
 export default async function getContext<T> (
@@ -66,16 +65,16 @@ export default async function getContext<T> (
     useLockfile: boolean,
   },
 ): Promise<PnpmContext<T>> {
-  const importersContext = await readImportersContext(importers, opts.lockfileDirectory, {
-    shamefullyFlatten: opts.shamefullyFlatten,
-  })
+  const importersContext = await readImportersContext(importers, opts.lockfileDirectory)
 
   if (importersContext.modules) {
     await validateNodeModules(importersContext.modules, importersContext.importers, {
+      currentShamefullyFlatten: importersContext.currentShamefullyFlatten,
       force: opts.force,
       include: opts.include,
       independentLeaves: opts.independentLeaves,
       lockfileDirectory: opts.lockfileDirectory,
+      shamefullyFlatten: opts.shamefullyFlatten,
       store: opts.store,
     })
   }
@@ -96,6 +95,7 @@ export default async function getContext<T> (
   }
 
   const ctx: PnpmContext<T> = {
+    hoistedAliases: importersContext.hoistedAliases,
     importers: importersContext.importers,
     include: opts.include || importersContext.include,
     lockfileDirectory: opts.lockfileDirectory,
@@ -105,6 +105,7 @@ export default async function getContext<T> (
       ...opts.registries,
       ...importersContext.registries,
     },
+    shamefullyFlatten: opts.shamefullyFlatten,
     skipped: importersContext.skipped,
     storePath: opts.store,
     virtualStoreDir: importersContext.virtualStoreDir,
@@ -127,10 +128,10 @@ async function validateNodeModules (
     modulesDir: string,
     id: string,
     prefix: string,
-    currentShamefullyFlatten: boolean | null,
-    shamefullyFlatten: boolean,
   }>,
   opts: {
+    currentShamefullyFlatten: boolean | null,
+    shamefullyFlatten: boolean,
     force: boolean,
     lockfileDirectory: string,
     include?: IncludedDependencies,
@@ -169,8 +170,8 @@ async function validateNodeModules (
   }
   await Promise.all(importers.map(async (importer) => {
     try {
-      if (typeof importer.currentShamefullyFlatten === 'boolean' && importer.currentShamefullyFlatten !== importer.shamefullyFlatten) {
-        if (importer.currentShamefullyFlatten) {
+      if (importer.id === '.' && typeof opts.currentShamefullyFlatten === 'boolean' && opts.currentShamefullyFlatten !== opts.shamefullyFlatten) {
+        if (opts.currentShamefullyFlatten) {
           throw new PnpmError(
             'SHAMEFULLY_FLATTEN_WANTED',
             'This "node_modules" folder was created using the --shamefully-flatten option.'
@@ -252,6 +253,8 @@ export async function getContextForSingleImporter (
   },
 ): Promise<PnpmSingleContext> {
   const {
+    currentShamefullyFlatten,
+    hoistedAliases,
     importers,
     include,
     modules,
@@ -266,9 +269,6 @@ export async function getContextForSingleImporter (
       },
     ],
     opts.lockfileDirectory,
-    {
-      shamefullyFlatten: opts.shamefullyFlatten,
-    },
   )
 
   const storePath = opts.store
@@ -279,17 +279,19 @@ export async function getContextForSingleImporter (
 
   if (modules) {
     await validateNodeModules(modules, importers, {
+      currentShamefullyFlatten,
       force: opts.force,
       include: opts.include,
       independentLeaves: opts.independentLeaves,
       lockfileDirectory: opts.lockfileDirectory,
+      shamefullyFlatten: opts.shamefullyFlatten,
       store: opts.store,
     })
   }
 
   await makeDir(storePath)
   const ctx: PnpmSingleContext = {
-    hoistedAliases: importer.hoistedAliases,
+    hoistedAliases,
     importerId,
     include: opts.include || include,
     lockfileDirectory: opts.lockfileDirectory,

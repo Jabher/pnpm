@@ -72,24 +72,24 @@ export interface HeadlessOptions {
   },
   engineStrict: boolean,
   extraBinPaths?: string[],
+  hoistedAliases: {[depPath: string]: string[]}
   ignoreScripts: boolean,
   include: IncludedDependencies,
   independentLeaves: boolean,
   importers: Array<{
     bin: string,
     buildIndex: number,
-    hoistedAliases: {[depPath: string]: string[]}
     manifest: ImporterManifest,
     modulesDir: string,
     id: string,
     prefix: string,
     pruneDirectDependencies?: boolean,
-    shamefullyFlatten: boolean,
   }>,
   lockfileDirectory: string,
   storeController: StoreController,
   sideEffectsCacheRead: boolean,
   sideEffectsCacheWrite: boolean,
+  shamefullyFlatten: boolean,
   force: boolean,
   store: string,
   rawNpmConfig: object,
@@ -155,10 +155,12 @@ export default async (opts: HeadlessOptions) => {
       {
         currentLockfile,
         dryRun: false,
+        hoistedAliases: opts.hoistedAliases,
         include: opts.include,
         lockfileDirectory,
         pruneStore: opts.pruneStore,
         registries: opts.registries,
+        shamefullyFlatten: opts.shamefullyFlatten,
         skipped,
         storeController: opts.storeController,
         virtualStoreDir,
@@ -228,27 +230,26 @@ export default async (opts: HeadlessOptions) => {
     })
   }
 
-  await Promise.all(opts.importers.map(async (importer) => {
-    if (importer.shamefullyFlatten) {
-      importer.hoistedAliases = await shamefullyFlattenByLockfile(filteredLockfile, importer.id, {
-        getIndependentPackageLocation: opts.independentLeaves
-          ? async (packageId: string, packageName: string) => {
-            const { directory } = await opts.storeController.getPackageLocation(packageId, packageName, {
-              lockfileDirectory: opts.lockfileDirectory,
-              targetEngine: opts.sideEffectsCacheRead && ENGINE_NAME || undefined,
-            })
-            return directory
-          }
-          : undefined,
-        lockfileDirectory: opts.lockfileDirectory,
-        modulesDir: importer.modulesDir,
-        registries: opts.registries,
-        virtualStoreDir,
-      })
-    } else {
-      importer.hoistedAliases = {}
-    }
-  }))
+  let hoistedAliases!: {[depPath: string]: string[]}
+  if (opts.shamefullyFlatten) {
+    hoistedAliases = await shamefullyFlattenByLockfile(filteredLockfile, '.', {
+      getIndependentPackageLocation: opts.independentLeaves
+        ? async (packageId: string, packageName: string) => {
+          const { directory } = await opts.storeController.getPackageLocation(packageId, packageName, {
+            lockfileDirectory: opts.lockfileDirectory,
+            targetEngine: opts.sideEffectsCacheRead && ENGINE_NAME || undefined,
+          })
+          return directory
+        }
+        : undefined,
+      lockfileDirectory: opts.lockfileDirectory,
+      modulesDir: importer.modulesDir,
+      registries: opts.registries,
+      virtualStoreDir,
+    })
+  } else {
+    hoistedAliases = {}
+  }
 
   await Promise.all(opts.importers.map(async ({ id, manifest, modulesDir, prefix }) => {
     await linkRootPackages(filteredLockfile, {

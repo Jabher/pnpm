@@ -10,24 +10,19 @@ import path = require('path')
 export interface ImporterOptions {
   bin?: string,
   prefix: string,
-  shamefullyFlatten?: boolean,
 }
 
 export default async function <T>(
   importers: (ImporterOptions & T)[],
   lockfileDirectory: string,
-  opts: {
-    shamefullyFlatten: boolean,
-  },
 ): Promise<{
+  currentShamefullyFlatten: boolean | null,
+  hoistedAliases: { [depPath: string]: string[] },
   importers: Array<{
     bin: string,
-    currentShamefullyFlatten: boolean | null,
-    hoistedAliases: { [depPath: string]: string[] },
     id: string,
     modulesDir: string,
     prefix: string,
-    shamefullyFlatten: boolean,
   } & T>,
   include: {
     dependencies: boolean,
@@ -43,22 +38,18 @@ export default async function <T>(
   const virtualStoreDir = await realNodeModulesDir(lockfileDirectory)
   const modules = await readModulesYaml(virtualStoreDir)
   return {
+    currentShamefullyFlatten: modules && modules.shamefullyFlatten,
+    hoistedAliases: modules && modules.hoistedAliases || {},
     importers: await Promise.all(
       importers.map(async (importer) => {
         const modulesDir = await realNodeModulesDir(importer.prefix)
         const importerId = getLockfileImporterId(lockfileDirectory, importer.prefix)
-        const importerModules = modules && modules.importers[importerId]
 
         return {
           ...importer,
           bin: importer.bin || path.join(importer.prefix, 'node_modules', '.bin'),
-          currentShamefullyFlatten: importerModules && importerModules.shamefullyFlatten,
-          hoistedAliases: importerModules && importerModules.hoistedAliases || {},
           id: importerId,
           modulesDir,
-          shamefullyFlatten: Boolean(
-            typeof importer.shamefullyFlatten === 'boolean' ? importer.shamefullyFlatten : opts.shamefullyFlatten
-          ),
         }
       })),
     include: modules && modules.included || { dependencies: true, devDependencies: true, optionalDependencies: true },

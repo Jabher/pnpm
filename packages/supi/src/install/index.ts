@@ -133,17 +133,6 @@ export async function install (
 
 export type MutatedImporter = ImportersOptions & DependenciesMutation
 
-export class ShamefullyFlattenNotInLockfileDirectoryError extends PnpmError {
-  public readonly shamefullyFlattenDirectory: string
-  public readonly lockfileDirectory: string
-
-  constructor (shamefullyFlattenDirectory: string, lockfileDirectory: string) {
-    super('SHAMEFULLY_FLATTEN_NOT_IN_LOCKFILE_DIR', 'Shamefully flatten can be only used in the lockfile directory')
-    this.shamefullyFlattenDirectory = shamefullyFlattenDirectory
-    this.lockfileDirectory = lockfileDirectory
-  }
-}
-
 export async function mutateModules (
   importers: MutatedImporter[],
   maybeOpts: InstallOptions & {
@@ -164,11 +153,6 @@ export async function mutateModules (
 
   if (!opts.include.dependencies && opts.include.optionalDependencies) {
     throw new PnpmError('OPTIONAL_DEPS_REQUIRE_PROD_DEPS', 'Optional dependencies cannot be installed without production dependencies')
-  }
-  for (const { prefix, shamefullyFlatten } of importers) {
-    if (prefix !== opts.lockfileDirectory && shamefullyFlatten) {
-      throw new ShamefullyFlattenNotInLockfileDirectoryError(prefix, opts.lockfileDirectory)
-    }
   }
 
   const ctx = await getContext(importers, opts)
@@ -235,13 +219,11 @@ export async function mutateModules (
           importers: ctx.importers as Array<{
             bin: string,
             buildIndex: number,
-            hoistedAliases: {[depPath: string]: string[]}
             id: string,
             manifest: ImporterManifest,
             modulesDir: string,
             prefix: string,
             pruneDirectDependencies?: boolean,
-            shamefullyFlatten: boolean,
           }>,
           include: opts.include,
           independentLeaves: opts.independentLeaves,

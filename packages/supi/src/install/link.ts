@@ -41,7 +41,6 @@ export {
 export interface Importer {
   bin: string,
   directNodeIdsByAlias: {[alias: string]: string},
-  hoistedAliases: {[depPath: string]: string[]},
   id: string,
   linkedDependencies: LinkedDependency[],
   manifest: ImporterManifest,
@@ -49,7 +48,6 @@ export interface Importer {
   prefix: string,
   pruneDirectDependencies: boolean,
   removePackages?: string[],
-  shamefullyFlatten: boolean,
   topParents: Array<{name: string, version: string}>,
 }
 
@@ -76,6 +74,8 @@ export default async function linkPackages (
     updateLockfileMinorVersion: boolean,
     outdatedDependencies: {[pkgId: string]: string},
     strictPeerDependencies: boolean,
+    hoistedAliases: {[depPath: string]: string[]},
+    shamefullyFlatten: boolean,
   },
 ): Promise<{
   currentLockfile: Lockfile,
@@ -300,11 +300,11 @@ export default async function linkPackages (
   }
 
   // Important: shamefullyFlattenGraph changes depGraph, so keep this at the end, right before linkBins
-  if (newDepPaths.length > 0 || removedDepPaths.size > 0) {
+  if (opts.shamefullyFlatten && (newDepPaths.length > 0 || removedDepPaths.size > 0)) {
     await Promise.all(
-      importers.filter(({ shamefullyFlatten }) => shamefullyFlatten)
+      importers
         .map(async (importer) => {
-          importer.hoistedAliases = await shamefullyFlattenGraph(
+          opts.hoistedAliases = await shamefullyFlattenGraph(
             depNodes.map((depNode) => ({
               absolutePath: depNode.absolutePath,
               children: depNode.children,

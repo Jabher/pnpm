@@ -213,6 +213,18 @@ export async function recursive (
         })
       )
     }))
+    if (opts.shamefullyFlatten && !importers.some((importer) => importer.prefix === opts.lockfileDirectory)) {
+      const rootPrefix = opts.lockfileDirectory || opts.prefix
+      importers.unshift({
+        buildIndex: 0,
+        manifest: {},
+        prefix: rootPrefix,
+      })
+      manifestsByPath[rootPrefix] = {
+        manifest: {},
+        writeImporterManifest: async () => {},
+      }
+    }
     return importers
   }
 

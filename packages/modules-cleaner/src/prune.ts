@@ -29,13 +29,11 @@ const vacuum = promisify(vacuumCB)
 export default async function prune (
   importers: Array<{
     bin: string,
-    hoistedAliases: {[depPath: string]: string[]},
     id: string,
     modulesDir: string,
     prefix: string,
     pruneDirectDependencies?: boolean,
     removePackages?: string[],
-    shamefullyFlatten: boolean,
   }>,
   opts: {
     dryRun?: boolean,
@@ -48,6 +46,8 @@ export default async function prune (
     virtualStoreDir: string,
     lockfileDirectory: string,
     storeController: StoreController,
+    hoistedAliases: {[depPath: string]: string[]},
+    shamefullyFlatten: boolean,
   },
 ): Promise<Set<string>> {
   const wantedLockfile = filterLockfile(opts.wantedLockfile, {
@@ -118,12 +118,12 @@ export default async function prune (
 
   if (!opts.dryRun) {
     if (orphanDepPaths.length) {
-      if (opts.currentLockfile.packages) {
-        await Promise.all(importers.filter((importer) => importer.shamefullyFlatten).map((importer) => {
-          const { bin, hoistedAliases, modulesDir, prefix } = importer
+      if (opts.currentLockfile.packages && opts.shamefullyFlatten) {
+        await Promise.all(importers.map((importer) => {
+          const { bin, modulesDir, prefix } = importer
           return Promise.all(orphanDepPaths.map(async (orphanDepPath) => {
-            if (hoistedAliases[orphanDepPath]) {
-              await Promise.all(hoistedAliases[orphanDepPath].map((alias) => {
+            if (opts.hoistedAliases[orphanDepPath]) {
+              await Promise.all(opts.hoistedAliases[orphanDepPath].map((alias) => {
                 return removeDirectDependency({
                   name: alias,
                 }, {
@@ -134,7 +134,7 @@ export default async function prune (
                 })
               }))
             }
-            delete hoistedAliases[orphanDepPath]
+            delete opts.hoistedAliases[orphanDepPath]
           }))
         }))
       }
